@@ -16,7 +16,7 @@ def login(username: str, password: str) -> Optional[str]:
     Returns:
         Optional[str]: token if login is successful, None otherwise
     """
-    # TODO: Implement the login function
+    # DONE
     # 1 - make a request to the login endpoint
     # 2 - check if the response status code is 200
     # 3 - if it is, return the access_token
@@ -46,17 +46,14 @@ class APIUser(HttpUser):
 
     # Put your stress tests here.
     # See https://docs.locust.io/en/stable/writing-a-locustfile.html for help.
-    # TODO
-    # raise NotImplementedError
+    # DONE
     @task(1)
     def predict(self):
         token = login("admin@example.com", "admin")
         files = [("file", ("dog.jpeg", open("dog.jpeg", "rb"), "image/jpeg"))]
         headers = {"Authorization": f"Bearer {token}"}
-        payload = {}
         self.client.post(
-            "http://0.0.0.0:8000/model/predict",
+            "/model/predict",
             headers=headers,
-            data=payload,
             files=files,
         )
