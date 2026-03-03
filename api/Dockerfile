@@ -15,4 +15,4 @@ RUN ["python", "-m", "pytest", "-v", "/src/tests"]
 
 FROM base AS build
 
-CMD gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:5000 main:app
+CMD gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:5000 --timeout 120 main:app
