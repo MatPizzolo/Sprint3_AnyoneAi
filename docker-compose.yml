@@ -1,3 +1,4 @@
+
 services:
   api:
     image: flask_api
@@ -43,7 +44,7 @@ services:
 
   model:
     image: ml_service
-    container_name: ml_service
+    # container_name: ml_service
     build:
       context: ./model
       dockerfile: ./Dockerfile

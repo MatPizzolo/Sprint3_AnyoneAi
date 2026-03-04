@@ -1,6 +1,9 @@
+import io
 import json
 import os
 import time
+
+from PIL import Image as PILImage
 
 import numpy as np
 import redis
@@ -42,10 +45,26 @@ def predict(image_name):
     pred_probability = None
     # DONE
     # Implement the code to predict the class of the image_name
-    # Load image
-    img = image.load_img(os.path.join(settings.UPLOAD_FOLDER, image_name), target_size=(224, 224))
-    # Apply preprocessing (convert to numpy array, match model input dimensions (including batch) and use the resnet50 preprocessing)
-    img = image.img_to_array(img)
+    # Load image — read bytes into memory with retry, then open via BytesIO
+    # to avoid filesystem cache/visibility race conditions on Docker volumes
+    image_path = os.path.join(settings.UPLOAD_FOLDER, image_name)
+    img_bytes = None
+    for attempt in range(5):
+        try:
+            if os.path.exists(image_path) and os.path.getsize(image_path) > 0:
+                with open(image_path, "rb") as f:
+                    img_bytes = f.read()
+                if img_bytes:
+                    break
+        except OSError:
+            pass
+        print(f"File not ready yet (attempt {attempt + 1}): {image_path}")
+        time.sleep(0.5)
+    if not img_bytes:
+        raise ValueError(f"Could not read image after retries: {image_path}")
+    pil_img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB").resize((224, 224))
+    img = np.array(pil_img, dtype=np.float32)
+    # Apply preprocessing (match model input dimensions (including batch) and use the resnet50 preprocessing)
     img = np.expand_dims(img, axis=0)
     img = preprocess_input(img)
     # Get predictions using model methods and decode predictions using resnet50 decode_predictions
@@ -92,14 +111,18 @@ def classify_process():
         job_id = job_data["id"]
 
         # Run the loaded ml model (use the predict() function)
-        class_name, pred_probability = predict(job_data["image_name"])
-
-        # Prepare a new JSON with the results
-        output = {"prediction": class_name, "score": pred_probability}
-
-        # Store the job results on Redis using the original
-        # job ID as the key
-        db.set(job_id, json.dumps(output))
+        print(f"[JOB {job_id[:8]}] Processing image: {job_data['image_name']}")
+        try:
+            class_name, pred_probability = predict(job_data["image_name"])
+            # Prepare a new JSON with the results
+            output = {"prediction": class_name, "score": pred_probability}
+            # Store the job results on Redis using the original job ID as the key
+            db.set(job_id, json.dumps(output))
+            print(f"[JOB {job_id[:8]}] Done -> class={class_name}, score={pred_probability}")
+        except Exception as e:
+            print(f"[JOB {job_id[:8]}] ERROR: {e}")
+            output = {"prediction": None, "score": None}
+            db.set(job_id, json.dumps(output))
 
         # Sleep for a bit
         time.sleep(settings.SERVER_SLEEP)

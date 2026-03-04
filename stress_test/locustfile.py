@@ -1,10 +1,16 @@
+import random
 from typing import Optional
-
+import os
 import requests
 from locust import HttpUser, between, task
 
 API_BASE_URL = "http://localhost:8000"
-
+IMAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+PRELOADED_IMAGES = [
+    (img_name, open(os.path.join(IMAGE_DIR, img_name), "rb").read())
+    for img_name in os.listdir(IMAGE_DIR)
+    if img_name.endswith((".jpg", ".jpeg", ".png"))
+]
 
 def login(username: str, password: str) -> Optional[str]:
     """This function calls the login endpoint of the API to authenticate the user and get a token.
@@ -42,18 +48,33 @@ def login(username: str, password: str) -> Optional[str]:
 
 
 class APIUser(HttpUser):
-    wait_time = between(1, 5)
-
     # Put your stress tests here.
     # See https://docs.locust.io/en/stable/writing-a-locustfile.html for help.
     # DONE
+    wait_time = between(1, 5)
+
+    def on_start(self):
+        self.token = login("admin@example.com", "admin")
+        if not self.token:
+            self.environment.runner.quit()
+
     @task(1)
+    def index(self):
+        self.client.get("/docs", name="index")
+
+    @task(3)
     def predict(self):
-        token = login("admin@example.com", "admin")
-        files = [("file", ("dog.jpeg", open("dog.jpeg", "rb"), "image/jpeg"))]
-        headers = {"Authorization": f"Bearer {token}"}
-        self.client.post(
-            "/model/predict",
-            headers=headers,
-            files=files,
-        )
+        image_name, image_bytes = random.choice(PRELOADED_IMAGES)
+        
+        files = {"file": (image_name, image_bytes, "image/jpeg")}
+        headers = {"Authorization": f"Bearer {self.token}"}
+        with self.client.post("/model/predict", headers=headers, files=files, name="predict", catch_response=True) as response:
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    if data.get("prediction") is None:
+                        response.failure("API returned 200 but prediction was None")
+                except Exception:
+                    response.failure("Failed to parse JSON")
+            else:
+                response.failure(f"Status code: {response.status_code}")

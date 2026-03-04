@@ -1,5 +1,5 @@
+import asyncio
 import json
-import time
 from uuid import uuid4
 
 import redis
@@ -13,7 +13,6 @@ db = redis.Redis(host=settings.REDIS_IP, port=settings.REDIS_PORT, decode_respon
 
 
 async def model_predict(image_name):
-    print(f"Processing image {image_name}...")
     """
     Receives an image name and queues the job into Redis.
     Will loop until getting the answer from our ML service.
@@ -51,7 +50,9 @@ async def model_predict(image_name):
     db.lpush(settings.REDIS_QUEUE, json.dumps(job_data))
 
     # Loop until we received the response from our ML model
-    while True:
+    timeout = 120
+    elapsed = 0
+    while elapsed < timeout:
         # Attempt to get model predictions using job_id
         # Hint: Investigate how can we get a value using a key from Redis
         output = db.get(job_id)
@@ -67,6 +68,7 @@ async def model_predict(image_name):
             break
 
         # Sleep some time waiting for model results
-        time.sleep(settings.API_SLEEP)
+        await asyncio.sleep(settings.API_SLEEP)
+        elapsed += settings.API_SLEEP
 
     return prediction, score
