@@ -20,12 +20,11 @@ async def predict(file: UploadFile = File(None), current_user=Depends(get_curren
     if file is not None and utils.allowed_file(file.filename):
         #   2. Store the image to disk, calculate hash (see `get_file_hash()` from `utils.py`) before
         #      to avoid re-writing an image already uploaded.
-        file_bytes = await file.read()
-        extension = os.path.splitext(file.filename)[1].lower()
-        file_hash = hashlib.md5(file_bytes).hexdigest() + extension
+        file_hash = await utils.get_file_hash(file)
         file_path = os.path.join(config.UPLOAD_FOLDER, file_hash)
         os.makedirs(config.UPLOAD_FOLDER, exist_ok=True)
         if not os.path.exists(file_path):
+            file_bytes = await file.read()
             with tempfile.NamedTemporaryFile(dir=config.UPLOAD_FOLDER, delete=False) as tmp:
                 tmp.write(file_bytes)
                 tmp.flush()
