@@ -62,8 +62,7 @@ def predict(image_name):
         time.sleep(0.5)
     if not img_bytes:
         raise ValueError(f"Could not read image after retries: {image_path}")
-    pil_img = PILImage.open(io.BytesIO(img_bytes))
-    img = pil_img.resize((224, 224), PILImage.BILINEAR)
+    img = image.load_img(io.BytesIO(img_bytes), target_size=(224, 224))
     img = image.img_to_array(img)
     # Apply preprocessing (match model input dimensions (including batch) and use the resnet50 preprocessing)
     img = np.expand_dims(img, axis=0)
